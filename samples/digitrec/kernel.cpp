@@ -2,7 +2,7 @@
 #include <math.h>
 #include <assert.h>
 #pragma ACCEL kernel
-void default_function(unsigned long test_image, unsigned long* train_images, unsigned char* knn_mat) {
+void default_function(unsigned long test_image, unsigned long train_images[10*1800], unsigned char knn_mat[10*3]) {
   for (int x = 0; x < 10; ++x) {
     for (int y = 0; y < 3; ++y) {
       knn_mat[(y + (x * 3))] = (unsigned char)50;

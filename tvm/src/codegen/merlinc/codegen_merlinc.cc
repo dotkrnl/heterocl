@@ -2,6 +2,7 @@
  *  Copyright (c) 2017 by Contributors
  * \file codegen_merlinc.cc
  */
+#include <tvm/build_module.h>
 #include <tvm/runtime/config.h>
 #include <tvm/packed_func_ext.h>
 #include <vector>
@@ -64,9 +65,16 @@ void CodeGenMerlinC::AddFunction(LoweredFunc f,
     else {
       auto arg = map_arg_type[vid];
       PrintType(std::get<1>(arg), this->stream);
-      if (v.type().is_handle())
-        this->stream << "*";
       this->stream << ' ' << std::get<0>(arg);
+      const BufferNode* buf = f->api_args[i].as<BufferNode>();
+      if (v.type().is_handle() && buf) {
+        this->stream << '[';
+        for (size_t i = 0; i < buf->shape.size(); i++) {
+          if (i) this->stream << '*';
+          this->PrintExpr(buf->shape[i], this->stream);
+        }
+        this->stream << ']';
+      }
     }
   }
   stream << ") {\n";
