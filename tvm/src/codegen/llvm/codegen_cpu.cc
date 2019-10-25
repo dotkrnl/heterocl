@@ -717,7 +717,12 @@ void CodeGenCPU::VisitStmt_(const AttrStmt* op) {
 
 void CodeGenCPU::VisitStmt_(const For* op) {
   CHECK(is_zero(op->min));
-  if (op->for_type == ForType::Serial ||
+
+  if (parallel_env_.in_parallel_loop &&
+      op->for_type == ForType::Parallel) {
+    LOG(WARNING) << "Nested parallel loop is not supported by threadpool of llvm backend.";
+    CodeGenLLVM::VisitStmt_(op);
+  } else if (op->for_type == ForType::Serial ||
       op->for_type == ForType::Unrolled ||
       op->for_type == ForType::Pipelined) {
     CodeGenLLVM::VisitStmt_(op);
@@ -735,8 +740,6 @@ void CodeGenCPU::VisitStmt_(const For* op) {
       Type t = op->extent.type();
       Expr num_task = cast(t, parallel_env_.num_task);
       Expr task_id = cast(t, parallel_env_.task_id);
-      CHECK(!parallel_env_.in_parallel_loop)
-          << "Nested parallel loop is not supported by threadpool, try fuse them instead";
       parallel_env_.in_parallel_loop = true;
       if (parallel_env_.stride_pattern) {
         CreateSerialFor(MakeValue(task_id),

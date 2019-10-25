@@ -1160,6 +1160,8 @@ void CodeGenLLVM::VisitStmt_(const For* op) {
   if (op->for_type == ForType::Unrolled) {
     LOG(WARNING) << "Unroll hint get ignore at CodeGenLLVM backend, "
                  << " consider set unroll_explicit=True";
+  } else if (op->for_type == ForType::Parallel) {
+    LOG(WARNING) << "Ignoring parallel hint at CodeGenLLVM backend";
   } else {
     CHECK(op->for_type == ForType::Serial || op->for_type == ForType::Pipelined);
   }
