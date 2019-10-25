@@ -365,36 +365,40 @@ def knn_vote(knn_mat):
 # Get the Results
 # ---------------
 
-# Data preparation
-train_images, _, test_images, test_labels = read_digitrec_data()
+def run():
+    # Data preparation
+    train_images, _, test_images, test_labels = read_digitrec_data()
+    
+    # Classification and testing
+    correct = 0.0
+    
+    # We have 180 test images
+    total_time = 0
+    for i in range(0, 180):
+    
+        # Prepare input data to offload function
+        # To load the tensors into the offloaded function, we must first cast it to
+        # the correct data type.
+        hcl_train_images = hcl.asarray(train_images, dtype_image)
+        hcl_knn_mat = hcl.asarray(np.zeros((10, 3)), dtype_knnmat)
+    
+        # Execute the offload function and collect the candidates
+        start = time.time()
+        offload(test_images[i], hcl_train_images, hcl_knn_mat)
+        total_time = total_time + (time.time() - start)
+    
+        # Convert back to a numpy array
+        knn_mat = hcl_knn_mat.asnumpy()
+    
+        # Feed the candidates to the voting algorithm and compare the labels
+        if knn_vote(knn_mat) == test_labels[i]:
+            correct += 1
+    
+    print("Average kernel time (s): {:.2f}".format(total_time/180))
+    print("Accuracy (%): {:.2f}".format(100*correct/180))
+    
+    # for testing
+    assert (correct >= 150.0)
 
-# Classification and testing
-correct = 0.0
-
-# We have 180 test images
-total_time = 0
-for i in range(0, 180):
-
-    # Prepare input data to offload function
-    # To load the tensors into the offloaded function, we must first cast it to
-    # the correct data type.
-    hcl_train_images = hcl.asarray(train_images, dtype_image)
-    hcl_knn_mat = hcl.asarray(np.zeros((10, 3)), dtype_knnmat)
-
-    # Execute the offload function and collect the candidates
-    start = time.time()
-    offload(test_images[i], hcl_train_images, hcl_knn_mat)
-    total_time = total_time + (time.time() - start)
-
-    # Convert back to a numpy array
-    knn_mat = hcl_knn_mat.asnumpy()
-
-    # Feed the candidates to the voting algorithm and compare the labels
-    if knn_vote(knn_mat) == test_labels[i]:
-        correct += 1
-
-print("Average kernel time (s): {:.2f}".format(total_time/180))
-print("Accuracy (%): {:.2f}".format(100*correct/180))
-
-# for testing
-assert (correct >= 150.0)
+if __name__ == "__main__":
+    run()
