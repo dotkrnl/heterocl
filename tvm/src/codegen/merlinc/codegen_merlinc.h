@@ -10,12 +10,12 @@
 #include <tvm/packed_func_ext.h>
 #include <string>
 #include "./codeanalys_merlinc.h"
-#include "../codegen_c.h"
+#include "../hlsc/codegen_hlsc.h"
 
 namespace TVM {
 namespace codegen {
 
-class CodeGenMerlinC final : public CodeGenC {
+class CodeGenMerlinC final : public CodeGenHLSC {
  public:
   CodeGenMerlinC();
   void AddFunction(LoweredFunc f, str2tupleMap<std::string, Type> map_arg_type);
@@ -36,8 +36,6 @@ class CodeGenMerlinC final : public CodeGenC {
   // overload visitor
   void VisitStmt_(const For* op) override;
   void VisitExpr_(const Broadcast* op, std::ostream& os) final; // NOLINT(*)
-  void VisitStmt_(const LetStmt* op) final; // NOLINT(*)
-  void VisitStmt_(const IfThenElse* op) final; // NOLINT(*)
  private:
 };
 

@@ -32,16 +32,8 @@ void CodeGenMerlinC::InitFuncState(LoweredFunc f) {
 
 void CodeGenMerlinC::AddFunction(LoweredFunc f,
         str2tupleMap<std::string, Type> map_arg_type) {
-  // Clear previous generated state
-  this->InitFuncState(f);
-
   // Skip the first underscore, so SSA variable starts from _1
   GetUniqueName("_");
-
-  // Register alloc buffer type
-  for (const auto & kv : f->handle_data_type) {
-    RegisterHandleType(kv.first.get(), kv.second.type());
-  }
 
   // Write header files
   this->stream << "#include <string.h>\n";
@@ -50,39 +42,7 @@ void CodeGenMerlinC::AddFunction(LoweredFunc f,
 
   // Write entry function name
   this->stream << "#pragma ACCEL kernel\n";
-  this->stream << "void " << f->name << "(";
-
-  // Write arguments
-  for (size_t i = 0; i < f->args.size(); ++i) {
-    Var v = f->args[i];
-    std::string vid = AllocVarID(v.get());
-    if (i != 0) this->stream << ", ";
-    if (map_arg_type.find(vid) == map_arg_type.end()) {
-      LOG(WARNING) << vid << " type not found\n";
-      PrintType(v.type(), this->stream);
-      this->stream << ' ' << vid;
-    }
-    else {
-      auto arg = map_arg_type[vid];
-      PrintType(std::get<1>(arg), this->stream);
-      this->stream << ' ' << std::get<0>(arg);
-      const BufferNode* buf = f->api_args[i].as<BufferNode>();
-      if (v.type().is_handle() && buf) {
-        this->stream << '[';
-        for (size_t i = 0; i < buf->shape.size(); i++) {
-          if (i) this->stream << '*';
-          this->PrintExpr(buf->shape[i], this->stream);
-        }
-        this->stream << ']';
-      }
-    }
-  }
-  stream << ") {\n";
-  int func_scope = this->BeginScope();
-  this->PrintStmt(f->body);
-  this->EndScope(func_scope);
-  this->PrintIndent();
-  this->stream << "}\n\n";
+  CodeGenHLSC::AddFunction(f, map_arg_type);
 }
 
 std::string CodeGenMerlinC::Finish() {
@@ -208,22 +168,6 @@ void CodeGenMerlinC::VisitExpr_(const Broadcast* op, std::ostream& os) { // NOLI
   return ;
 }
 
-void CodeGenMerlinC::VisitStmt_(const LetStmt* op) {
-  std::string value = PrintExpr(op->value);
-  // Skip the argument retrieving assign statement
-  std::string vid = AllocVarID(op->var.get());
-  if (op->var.type() != Handle() &&
-      value.find("TVMArray") == std::string::npos &&
-      value.find("arg") != 0) {
-    PrintIndent();
-    PrintType(op->var.type(), this->stream);
-    this->stream << ' '
-                 << vid
-                 << " = " << value << ";\n";
-  }
-  PrintStmt(op->body);
-}
-
 void CodeGenMerlinC::VisitStmt_(const For* op) {
   if (op->for_type == ForType::Parallel)
     stream << "#pragma ACCEL parallel\n";
@@ -250,32 +194,5 @@ void CodeGenMerlinC::VisitStmt_(const For* op) {
   CodeGenC::VisitStmt_(op);
 }
 
-void CodeGenMerlinC::VisitStmt_(const IfThenElse* op) {
-  std::string cond = PrintExpr(op->condition);
-
-  // Skip the buffer data checking
-  if (std::regex_match(cond, std::regex("!\\((arg)(.+)(== NULL)\\)")))
-      return ;
-
-  PrintIndent();
-  if (cond[0] == '(' && cond[cond.length() - 1] == ')') {
-    stream << "if " << cond << " {\n";
-  } else {
-    stream << "if (" << cond << ") {\n";
-  }
-  int then_scope = BeginScope();
-  PrintStmt(op->then_case);
-  this->EndScope(then_scope);
-
-  if (op->else_case.defined()) {
-    PrintIndent();
-    stream << "} else {\n";
-    int else_scope = BeginScope();
-    PrintStmt(op->else_case);
-    this->EndScope(else_scope);
-  }
-  PrintIndent();
-  stream << "}\n";
-}
 }  // namespace codegen
 }  // namespace TVM
