@@ -123,13 +123,14 @@ def top(target=None):
 
 
         # Third step: initialize the candidates (§3.3)
-        knn_mat = hcl.compute((10, 3), lambda x, y: 50, "knn_mat")
+        knn_mat_buf = hcl.compute((10, 4), lambda x, y: 50, "knn_mat_buf")
 
 
         # Fourth step: update the candidates (§3.4)
         hcl.mutate(dist.shape,
-                        lambda x, y: update_knn(dist, knn_mat, x, y),
+                        lambda x, y: update_knn(dist, knn_mat_buf, x, y),
                         "knn_update")
+        knn_mat = hcl.compute((10, 3), lambda x, y: knn_mat_buf[x][y], "knn_mat")
 
         # Final step: return the candidates (§3.5)
         return knn_mat
@@ -142,13 +143,14 @@ def top(target=None):
 
     # Data type customization (§5.1)
     scheme = hcl.create_scheme([test_image, train_images], knn)
-    scheme.downsize([knn.dist, knn.dist.out, knn.knn_mat], dtype_knnmat)
+    scheme.downsize([knn.dist, knn.dist.out, knn.knn_mat_buf, knn.knn_mat], dtype_knnmat)
 
     # Compute customization (§5.2)
     s = hcl.create_schedule_from_scheme(scheme)
 
     diff = knn.diff
     dist = knn.dist
+    knn_mat_buf = knn.knn_mat_buf
     knn_update = knn.knn_update
 
     # Merge loop nests
@@ -158,9 +160,15 @@ def top(target=None):
     # Reorder loop to expose more parallelism
     s[knn_update].reorder(knn_update.axis[1], knn_update.axis[0])
 
+    # Parallel initialization of knn mat
+    s[knn_mat_buf].parallel(knn_mat_buf.axis[0])
+
     # Parallel outer loop and pipeline inner loop
-    s[knn_update].parallel(knn_update.axis[1])
-    s[knn_update].pipeline(knn_update.axis[0])
+    s[knn_update].parallel(knn_update.axis[0])
+    s[knn_update].pipeline(knn_update.axis[1])
+
+    # Parallel the innermost loop of 49 pixels
+    s[dist].parallel(dist.axis[2])
 
     # At the end, we build the whole offloaded function.
     return hcl.build(s, target=target)
